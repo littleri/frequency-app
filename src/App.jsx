@@ -5,7 +5,7 @@ import {
   Clock, Lock, Eye, Infinity as InfinityIcon, ChevronRight,
   Zap, Coffee, CloudRain, Ghost, RefreshCw, Home, Save, Trash2, Play, Pause, Music, Sparkles,
   Users, CheckCircle, Bell, MoreVertical, Pin, Fingerprint, Settings, Shield, BellRing, Info, LogOut, Moon,
-  QrCode, Smartphone, Link, Key, SmartphoneNfc, Sun, Type, CreditCard, Heart
+  QrCode, Smartphone, Link, Key, SmartphoneNfc, Sun, Type, CreditCard, Heart, AlertCircle
 } from 'lucide-react';
 
 // ==========================================
@@ -205,12 +205,13 @@ const ChatInitiateModal = ({ type, onClose, onSend }) => {
     );
 };
 
-const EmissionModal = ({ onClose }) => {
+const EmissionModal = ({ onClose, initialDraft, onSaveDraft }) => {
   const { theme } = useTheme();
   const [mood, setMood] = useState(50); 
-  const [text, setText] = useState('');
+  const [text, setText] = useState(initialDraft || ''); // 初始化时使用传入的草稿
   const [isSent, setIsSent] = useState(false);
-  const [isSending, setIsSending] = useState(false); // 新增正在发送状态
+  const [isSending, setIsSending] = useState(false);
+  const [showDraftAlert, setShowDraftAlert] = useState(false); 
 
   // 使用玻璃效果背景
   const bgClass = theme === 'dark' ? 'page-glass-dark' : 'page-glass-light';
@@ -218,6 +219,7 @@ const EmissionModal = ({ onClose }) => {
   const textSub = theme === 'dark' ? 'text-slate-400' : 'text-slate-500';
   const inputColor = theme === 'dark' ? 'text-slate-200 placeholder-slate-600' : 'text-slate-800 placeholder-slate-400';
   const btnBg = theme === 'dark' ? 'bg-white/5 text-slate-400 hover:text-white' : 'bg-slate-100 text-slate-500 hover:text-slate-800';
+  const modalBg = theme === 'dark' ? 'bg-[#1A1E2E] border-white/10' : 'bg-white border-slate-200';
 
   const getMoodColor = () => {
     if (mood < 30) return 'text-indigo-400';
@@ -231,6 +233,34 @@ const EmissionModal = ({ onClose }) => {
      return '100Hz (Chill)';
   }
 
+  // 拦截关闭操作 - 只有当内容有变化且不为空时才提示，或者内容不为空且未保存
+  const handleAttemptClose = () => {
+      // 如果当前文本不为空，且不是发送状态
+      if (text.trim().length > 0 && !isSent && !isSending) {
+          // 如果内容和初始草稿不一样，或者虽然一样但用户意图是退出（此时可以提示，或者直接退出）
+          if (text !== initialDraft) {
+             setShowDraftAlert(true);
+          } else {
+             onClose();
+          }
+      } else {
+          onClose();
+      }
+  };
+
+  // 放弃草稿 (不保存本次修改，直接退出)
+  const handleDiscard = () => {
+      setShowDraftAlert(false);
+      onClose();
+  };
+
+  // 保存草稿
+  const handleSaveDraft = () => {
+      setShowDraftAlert(false);
+      if (onSaveDraft) onSaveDraft(text); // 将当前文本保存到父组件
+      onClose();
+  };
+
   const handleEmit = () => {
     if (isSending) return;
     setIsSending(true);
@@ -238,6 +268,7 @@ const EmissionModal = ({ onClose }) => {
     setTimeout(() => {
         setIsSending(false);
         setIsSent(true);
+        if (onSaveDraft) onSaveDraft(''); // 发送成功后清空草稿
         setTimeout(onClose, 1500);
     }, 2000);
   };
@@ -257,7 +288,7 @@ const EmissionModal = ({ onClose }) => {
       <div className="absolute top-12 left-0 w-full text-center pointer-events-none">
           <span className={`${textMain} font-medium text-lg`}>发射台</span>
       </div>
-      <button onClick={onClose} className={`absolute top-12 right-6 p-2 rounded-full z-50 ${theme === 'dark' ? 'text-slate-400 hover:bg-white/10' : 'text-slate-500 hover:bg-slate-100'}`}><X /></button>
+      <button onClick={handleAttemptClose} className={`absolute top-12 right-6 p-2 rounded-full z-50 ${theme === 'dark' ? 'text-slate-400 hover:bg-white/10' : 'text-slate-500 hover:bg-slate-100'}`}><X /></button>
       
       <div className="flex-1 flex flex-col pt-24">
           <div className="mb-8 mt-8">
@@ -310,6 +341,30 @@ const EmissionModal = ({ onClose }) => {
           )}
         </button>
       </div>
+
+      {/* 草稿保存确认弹窗 */}
+      {showDraftAlert && (
+          <div className="absolute inset-0 z-[100] bg-black/50 backdrop-blur-sm flex items-center justify-center p-8">
+              <div className={`w-full max-w-sm rounded-2xl p-6 shadow-2xl border animate-zoom-in ${modalBg}`}>
+                  <div className="flex flex-col items-center text-center mb-6">
+                      <AlertCircle size={40} className="text-indigo-500 mb-3" />
+                      <h3 className={`text-lg font-bold mb-2 ${textMain}`}>是否保存草稿？</h3>
+                      <p className={`text-xs ${textSub}`}>现在的频率如果丢弃了，可能就找不回这种感觉了。</p>
+                  </div>
+                  <div className="flex flex-col gap-3">
+                      <button onClick={handleSaveDraft} className="w-full py-3 bg-indigo-600 rounded-xl text-white font-bold hover:bg-indigo-500 transition-colors">
+                          保存草稿
+                      </button>
+                      <button onClick={() => setShowDraftAlert(false)} className={`w-full py-3 rounded-xl font-medium border ${theme === 'dark' ? 'border-white/10 text-slate-300 hover:bg-white/5' : 'border-slate-200 text-slate-600 hover:bg-slate-50'}`}>
+                          继续编辑
+                      </button>
+                      <button onClick={handleDiscard} className="w-full py-2 text-red-500 text-xs mt-1 hover:text-red-400">
+                          不保存，直接退出
+                      </button>
+                  </div>
+              </div>
+          </div>
+      )}
     </div>
   );
 };
@@ -500,6 +555,33 @@ const SimilarDetailView = ({ onClose, onConnect }) => {
     const [progress, setProgress] = useState(0);
     const timerRef = useRef(null);
 
+    // 触摸手势状态
+    const [touchStart, setTouchStart] = useState(null);
+    const [touchEnd, setTouchEnd] = useState(null);
+    const minSwipeDistance = 50;
+
+    const onTouchStart = (e) => {
+        setTouchEnd(null); // 重置结束位置
+        setTouchStart(e.targetTouches[0].clientX);
+    };
+
+    const onTouchMove = (e) => {
+        setTouchEnd(e.targetTouches[0].clientX);
+    };
+
+    const onTouchEnd = () => {
+        if (!touchStart || !touchEnd) return;
+        const distance = touchStart - touchEnd;
+        const isLeftSwipe = distance > minSwipeDistance;
+        const isRightSwipe = distance < -minSwipeDistance;
+
+        if (isLeftSwipe) {
+            handleNext();
+        } else if (isRightSwipe) {
+            handlePrev();
+        }
+    };
+
     const startHold = () => {
         if (holding) return;
         setHolding(true);
@@ -524,7 +606,12 @@ const SimilarDetailView = ({ onClose, onConnect }) => {
     };
 
     return (
-        <div className={`absolute inset-0 z-[70] backdrop-blur-xl flex flex-col ${bgBackdrop}`}>
+        <div 
+            className={`absolute inset-0 z-[70] backdrop-blur-xl flex flex-col ${bgBackdrop}`}
+            onTouchStart={onTouchStart}
+            onTouchMove={onTouchMove}
+            onTouchEnd={onTouchEnd}
+        >
             <StatusBar />
             <div className="pt-12 px-6 flex justify-between items-center">
                 <button onClick={onClose}><X className={navColor}/></button>
@@ -1237,11 +1324,12 @@ const ProfilePage = ({ onViewResonance, onOpenFriendsList, onOpenSettings }) => 
 // 6. 主控制器 (App) - 放在最后
 // ==========================================
 const App = () => {
-  const [theme, setTheme] = useState('dark'); 
+  const [theme, setTheme] = useState('light'); 
   const [activeTab, setActiveTab] = useState('resonance'); 
   const [modalView, setModalView] = useState(null); 
   const [selectedSignal, setSelectedSignal] = useState(null); 
   const [selectedFreq, setSelectedFreq] = useState(null); 
+  const [draftText, setDraftText] = useState(''); // 新增：全局草稿状态
   const [conversations, setConversations] = useState([
       { id: 1, user: 'USER_9527', avatarColor: 'bg-teal-500', lastMsg: '你也喜欢在雨天听爵士吗？', time: '12:30', unread: true, pinned: false },
       { id: 2, user: 'Radio_Head', avatarColor: 'bg-indigo-600', lastMsg: '[分享了一首歌曲]', time: '04:15', unread: false, pinned: true },
@@ -1265,7 +1353,16 @@ const App = () => {
         {modalView === 'card' && <RandomSignalCard type="random" onClose={() => setModalView(null)} onConnect={() => setModalView('chat')} />}
         {modalView === 'my-frequencies' && <MyFrequencyList onBack={() => setModalView(null)} onSelectFrequency={(item) => { setSelectedFreq(item); setModalView('similar-detail'); }} />}
         {modalView === 'similar-detail' && <SimilarDetailView onClose={() => setModalView('my-frequencies')} onConnect={() => { addConversation('Similar_Soul', 'Resonance Matched'); setModalView('chat'); }} />}
-        {modalView === 'emit' && <EmissionModal onClose={() => setModalView(null)} />}
+        
+        {/* 传递草稿状态给 EmissionModal */}
+        {modalView === 'emit' && (
+            <EmissionModal 
+                onClose={() => setModalView(null)} 
+                initialDraft={draftText} 
+                onSaveDraft={setDraftText} 
+            />
+        )}
+        
         {modalView === 'friends-list' && <FriendsListPage onBack={() => setModalView(null)} onChatStart={() => setModalView('chat')} />}
         {modalView === 'chat' && <ChatRoom onClose={() => setModalView(null)} />}
         {modalView === 'resonance-list' && selectedSignal && <ResonanceListPage signal={selectedSignal} onBack={() => setModalView(null)} onChatStart={() => setModalView('chat')} />}
